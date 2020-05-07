@@ -1,0 +1,185 @@
+<link rel="import" href="../polymer/polymer.html">
+
+<dom-module id="zi-font-loader-fallback">
+  <script>
+    (function() {
+      var TEST_STRING = 'AxmTYklsjo190QW';
+      var DEFAULT_STYLES = 'display:block;' +
+          'position:absolute;' +
+          'top:-999px;' +
+          'left:-999px;' +
+          'font-size:48px;' +
+          'width:auto;' +
+          'height:auto;' +
+          'line-height:normal;' +
+          'margin:0;' +
+          'padding:0;' +
+          'font-variant:normal;' +
+          'white-space:nowrap;';
+      Polymer({
+        is: 'zi-font-loader-fallback',
+        properties: {
+          /** The object defining the font to be loaded. */
+          font: { type: Object },
+          /** 
+           * Allows to specify the document in which to load the font. If not 
+           * provided the font will be loaded in the current document.
+           */
+          targetDocument: {
+            type: Object,
+            value: function() {
+              return window.document;
+            }
+          },
+          /** The timeout to wait for the font to load. */
+          timeout: {
+            type: Number,
+            value: 10000
+          },
+          /** 
+           * Allows configuring the pixel tollerance for font change detecttion.
+           */
+          tollerance: {
+            type: Number,
+            value: 2
+          },
+          _parent: { type: Object },
+          _parentAttached: { type: Boolean },
+          _ts: { type: Number },
+          _rafIndex: { type: Number }
+        },
+
+        /** @override */
+        observers: ['_onFontChanged(font, targetDocument)'],
+
+        /** Handle changing the font that we need to observe */
+        _onFontChanged: function() {
+          this.cancelAsync(this._rafIndex);
+          this._removeParentFromDom();
+          this._referenceElement = this.targetDocument.body;
+          this._parent = this.targetDocument.createElement('div');
+          this._parent.innerHTML = this._generateTestElements();
+          this._measurements = {
+            sans: { element: this._parent.firstElementChild }, 
+            serif: {
+              element: this._parent.firstElementChild.nextElementSibling
+            }
+          };
+          this._referenceElement.appendChild(this._parent);
+          this._calculateSize(this._measurements.serif.element);
+          this._calculateSize(this._measurements.sans.element);
+          // Now wait for render and re-measure;
+          this.async(function() {
+            var serifbox = this._calculateSize(this._measurements.serif.element);
+            var sansbox = this._calculateSize(this._measurements.sans.element);
+
+            // console.log('INITIAL: |' + this.font.family + '| Serif: ' + 
+            //     serifbox.width + 'x' + serifbox.height +
+            //     ' Sans: ' + sansbox.width + 'x' + sansbox.height);
+
+            this._measurements.serif.size = serifbox;
+            this._measurements.sans.size = sansbox;
+
+            // Now set the new font style and wait for changes....
+            this._measurements.serif.element.style.fontFamily = '"' + 
+                this.font.family + '",' + 'serif';
+            this._measurements.sans.element.style.fontFamily = '"' + 
+                this.font.family + '",' + 'sans-serif';
+            this._ts = Date.now();
+            this._onRaf();
+          }, 100);
+        },
+
+        /** Periodic check for font change */
+        _onRaf: function() {
+          if (this._ts + this.timeout < Date.now()) {
+            this.fire('zi-font-load-fail', {
+              family: this.font.family
+            });
+          } else {
+            var serifbox = this._calculateSize(
+                this._measurements.serif.element);
+            var sansbox = this._calculateSize(this._measurements.sans.element);
+            // console.log('Serif: ' + serifbox.width + 'x' + serifbox.height +
+            // ' Sans: ' + sansbox.width + 'x' + sansbox.height);
+            
+            if (this._sizeDiffer(serifbox, this._measurements.serif.size) || 
+                this._sizeDiffer(sansbox, this._measurements.sans.size)) {
+              this.fire('zi-font-load-complete', {
+                family: this.font.family
+              });
+            } else {
+              this._rafIndex = this.async(this._onRaf.bind(this), 100);
+            }
+          }
+        },
+
+        /**
+         * Returns the width/height of the element.
+         * 
+         * @private
+         * @param {Element} element
+         * @return {{width: number, height: number}}
+         */
+        _calculateSize: function(element) {
+          return {
+            width: element.offsetWidth,
+            height: element.offsetHeight
+          };
+        },
+
+        /**
+         * Calculates if the size of the test div has changed enough to consider
+         * it as font changed.
+         * @param {{width: number, height: number}} a
+         * @param {{width: number, height: number}} b
+         * @return {boolean}
+         */
+        _sizeDiffer: function(a, b) {
+          return Math.abs(a.width - b.width) >= this.tollerance ||
+              Math.abs(a.height - b.height) >= this.tollerance;
+        },
+
+        /** Will remove the parent conatiner from its current owner. */
+        _removeParentFromDom: function() {
+          if (this._parent && this._parent.parentNode) {
+            this._parent.parentNode.removeChild(this._parent);
+          }
+        },
+
+        /**
+         * Generates the HTML for testing fonts.
+         * @return {string}
+         */
+        _generateTestElements: function() {
+          return this._generateTestElement('sans-serif') + 
+              this._generateTestElement('serif');
+        },
+
+        /** 
+         * Generates a div with style spplyed to match a certain font specs.
+         * @param {string} family
+         * @return {string}
+         */
+        _generateTestElement: function(family) {
+          return '<div style="' + this._getStyleString(
+                  family, this.font.weight, this.font.style) + 
+              '">' + TEST_STRING + '</div>';
+        },
+
+        /**
+         * Generates a style string to apply font on test spans.
+         * @param {string} family
+         * @param {string} weight
+         * @param {string} style
+         * @return {string}
+         */
+        _getStyleString: function(family, weight, style) {
+          return DEFAULT_STYLES + 'font-weight:' + weight + ';' +
+              'font-style:' + style + ';' + 'font-family:' + family + ';';
+        }
+      });
+    })();
+  </script>
+</dom-module>
+

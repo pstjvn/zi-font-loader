@@ -1,0 +1,26 @@
+<link rel="import" href="../polymer/polymer.html">
+
+<!--
+  Provides means to check if the fonts API is supported on the target browser.
+
+  @demo demo/index.html
+-->
+<dom-module id="zi-font-support">
+  <script>
+    (function() {
+      var _supported = !!('fonts' in window.document);
+      Polymer({
+        is: 'zi-font-support',
+        properties: {
+          /** If the fonts API is supported in the browser this will be true. */
+          supported: {
+            type: Boolean,
+            value: _supported,
+            notify: true
+          }
+        }
+      }); 
+    })();
+  </script>
+</dom-module>
+

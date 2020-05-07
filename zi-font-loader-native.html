@@ -1,0 +1,151 @@
+<link rel="import" href="../polymer/polymer.html">
+
+<!--
+  Uses the fonts API (we also support a fallback) to load a font in the document.
+  Supports loading the font in a framed document as well.
+
+  @demo demo/index.html
+-->
+<dom-module id="zi-font-loader-native">
+  <script>
+    Polymer({
+      is: 'zi-font-loader-native',
+      properties: {
+        /** The object defining the font to be loaded. */
+        font: { type: Object },
+        /** 
+         * Allows to specify the document in which to load the font. If not provided the
+         * font will be loaded in the current document.
+         */
+        targetDocument: {
+          type: Object,
+          value: function() {
+            return window.document;
+          }
+        },
+        /** The timeout to wait for the font to load. */
+        timeout: {
+          type: Number,
+          value: 5000
+        }
+      },
+
+      /** @override */
+      observers: ['_onFontChanged(font, targetDocument)'],
+
+      /**
+       * Handles the change in the font object. It will trigger the font loading
+       * process and ignore the completion of previous loaded fonts.
+       */
+      _onFontChanged: function() {
+        var match = null;
+        if (this.font) {
+          if (match = this._findFontfaceObject()) {
+            if (match.status == 'loaded') this._onFontLoaded(match);
+            else {
+              Promise.race([
+                (new Promise(this._createNewTimeoutInPromise.bind(this))),
+                match.load()
+              ]).then(this._onFontLoaded.bind(this), this._onFontLoadError.bind(this, match));
+            }
+          } else {
+            this.fire('zi-internal-error', {
+              message: 'Cannot find font match in document fonts, check if font-face is present'
+            });
+          }
+        }
+      },
+
+      /** 
+       * This is simply the resolution function to use to race with the font loader.
+       * @param {!function(*): void} resolve
+       * @param {!function(*): void} reject
+       */
+      _createNewTimeoutInPromise: function(resolve, reject) {
+        this.async(function() {
+          reject(new Error('Font loading timed out'));
+        }, this.timeout);
+      },
+
+      /**
+       * Iterates over the fonts loaded in the target document (or own document) and
+       * returns the first match.
+       * @return {?FontFace}
+       */
+      _findFontfaceObject: function() {
+        var found = null;
+        this.targetDocument.fonts.forEach(function(fontfaceobj, i) {
+          if (found == null) {
+            if (this._fontFaceObjectMatches(fontfaceobj)) {
+              found = fontfaceobj;
+            }
+          }
+        }, this);
+        return found;
+      },
+
+      /**
+       * Attempts to figure out of the FontFace object in the document matches the font
+       * description we need to load 
+       * @param {FontFace} obj
+       * @return {boolean}
+       */
+      _fontFaceObjectMatches: function(obj) {
+        return ((this._normalizeFamily(obj.family) == this._normalizeFamily(this.font.family)) &&
+          (this._normalizeWeight(obj.weight) == this._normalizeWeight(this.font.weight)) &&
+          (obj.style == this.font.style));
+      },
+
+      /** 
+       * Called when the font has completed loading. 
+       * @param {FontFace} fontfaceobj
+       */
+      _onFontLoaded: function(fontfaceobj) {
+        if (this._normalizeFamily(fontfaceobj.family) == this._normalizeFamily(this.font.family)) {
+          this.fire('zi-font-load-complete', {
+            family: this.font.family
+          });
+        }
+      },
+
+      /** 
+       * Called when there was a problem with loading the font, either it timed out
+       * or could not be loaded.
+       * @param {FontFace} fontfaceobj
+       * @param {*} e The error if any.
+       */
+      _onFontLoadError: function(fontfaceobj, e) {
+        if (this._normalizeFamily(fontfaceobj.family) == this._normalizeFamily(this.font.family)) {
+          this.fire('zi-font-load-fail', {
+            family: this.font.family
+          });
+        }
+      },
+
+      /** 
+       * Normalizes how font family is used.
+       * @param {string} family
+       * @return {string}
+       */
+      _normalizeFamily: function(family) {
+        return family.replace(/[\'\"]/g, '').toLowerCase();
+      },
+
+      /**
+       * Normalizes the weight of the font to a number-like representation.
+       * @param {string|number} weight
+       * @return {string}
+       */
+      _normalizeWeight: function(weight) {
+        switch (weight) {
+          case 'normal':
+            return '400';
+          case 'bold':
+            return '700';
+          default:
+            return String(weight);
+        }
+      }
+    });
+  </script>
+</dom-module>

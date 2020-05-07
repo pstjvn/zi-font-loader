@@ -1,0 +1,110 @@
+<link rel="import" href="../polymer/polymer.html">
+<link rel="import" href="zi-font-support.html">
+<link rel="import" href="zi-font-loader-native.html">
+<link rel="import" href="zi-font-loader-fallback.html">
+
+<!--
+  Uses the fonts API (we also support a fallback) to load a font in the 
+  document.
+  Supports loading the font in a framed document as well.
+
+  @demo demo/index.html
+-->
+<dom-module id="zi-font-loader">
+  <template>
+    <zi-font-support supported="{{_hasNativeFontAPI}}"></zi-font-support>
+    <template is="dom-if" if="[[_hasNativeFontAPI]]">
+      <zi-font-loader-native 
+          font="[[_font]]" 
+          target-document="[[targetDocument]]" 
+          timeout="[[timeout]]">
+      </zi-font-loader-native>
+    </template>
+    <template is="dom-if" if="[[!_hasNativeFontAPI]]">
+      <zi-font-loader-fallback
+          font="[[_font]]" 
+          target-document="[[targetDocument]]" 
+          timeout="[[timeout]]">
+      </zi-font-loader-fallback>
+    </template>    
+  </template>
+  <script>
+    Polymer({
+      is: 'zi-font-loader',
+      properties: {
+        /** 
+         * Specify the provider of the font. Currently we only support loading 
+         * from Google.
+         */
+        fontProvider: {
+          type: String,
+          value: 'google'
+        },
+        /** The object defining the font to be loaded. */
+        font: { 
+          type: Object,
+          observer: '_onFontChanged'
+        },
+        /** 
+         * Allows to specify the document in which to load the font. If not 
+         * provided the font will be loaded in the current document.
+         */
+        targetDocument: { type: Object },
+        /** The timeout to wait for the font to load. */
+        timeout: { type: Number }
+      },
+
+      /** 
+       * Handles the change of the font object. At this stage we need to create
+       * a custom record of type similar to `FontFace` so we can compare them 
+       * with the native font records.
+       */
+      _onFontChanged: function() {
+        if (this.fontProvider == 'google') {
+          this._font = {
+            family: this.font.family,
+            weight: this._getDefaultFontWeight(this.font),
+            style: this._getDefaultFontStyle(this.font)
+          };
+        } else {
+          throw new Error('Cannot map non-Google fonts yet');
+        }
+      },
+
+      /**
+       * Given a config in Google fonts format, converts the variants to 
+       * Font.weight string.
+       *
+       * @private
+       * @param {{variants: Array<string>}} font
+       * @return {string}
+       */
+      _getDefaultFontWeight: function(font) {
+        // First check for 400
+        // then check for regular
+        // if none - return 400
+        if (font.variants.indexOf('400') != -1) return '400';
+        if (font.variants.indexOf('regular') != -1) return '400';
+        if (font.variants[0] != 'italic')  {
+          return font.variants[0];
+        } else {
+          return '400';
+        }
+      },
+
+      /**
+       * Check if the only supported variant is italic and return it, otherwise
+       * always return `normal`.
+       * 
+       * @private
+       * @param {Object} font
+       * @return {string}
+       */
+      _getDefaultFontStyle: function(font) {
+        if (font.variants.indexOf('italic') == 0) return 'italic';
+        return 'normal'
+      }
+    });
+  </script>
+</dom-module>
+
